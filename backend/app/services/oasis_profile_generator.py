@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from openai import OpenAI
-from app.adapters.graphiti_compat import Zep
+from . import memory_service
 
 from ..config import Config
 from ..utils.logger import get_logger
@@ -198,16 +198,16 @@ class OasisProfileGenerator:
             base_url=self.base_url
         )
 
-        # Zep client used for context retrieval
-        self.zep_api_key = zep_api_key or Config.ZEP_API_KEY
-        self.zep_client = None
+        # memory_service replaces the previous Zep client. zep_api_key is kept
+        # in the signature for backwards-compat but unused.
+        self._zep_api_key = zep_api_key
         self.graph_id = graph_id
-
-        if self.zep_api_key:
-            try:
-                self.zep_client = Zep(api_key=self.zep_api_key)
-            except Exception as e:
-                logger.warning(f"Failed to initialize Zep client: {e}")
+        self.memory_available = False
+        try:
+            memory_service.warmup()
+            self.memory_available = True
+        except Exception as e:
+            logger.warning(f"Failed to initialize memory service: {e}")
     
     def generate_profile_from_entity(
         self, 
@@ -298,7 +298,7 @@ class OasisProfileGenerator:
         """
         import concurrent.futures
 
-        if not self.zep_client:
+        if not self.memory_available:
             return {"facts": [], "node_summaries": [], "context": ""}
 
         entity_name = entity.name
@@ -316,55 +316,31 @@ class OasisProfileGenerator:
 
         comprehensive_query = t('progress.zepSearchQuery', name=entity_name)
 
-        def search_edges():
-            """Search edges (facts/relationships) with retry"""
-            max_retries = 3
-            last_exception = None
+        def _retry(fn, label: str):
             delay = 2.0
-
-            for attempt in range(max_retries):
+            for attempt in range(3):
                 try:
-                    return self.zep_client.graph.search(
-                        query=comprehensive_query,
-                        graph_id=self.graph_id,
-                        limit=30,
-                        scope="edges",
-                        reranker="rrf"
-                    )
+                    return fn()
                 except Exception as e:
-                    last_exception = e
-                    if attempt < max_retries - 1:
-                        logger.debug(f"Zep edge search attempt {attempt + 1} failed: {str(e)[:80]}, retrying...")
+                    if attempt < 2:
+                        logger.debug(f"Memory {label} attempt {attempt + 1} failed: {str(e)[:80]}, retrying...")
                         time.sleep(delay)
                         delay *= 2
                     else:
-                        logger.debug(f"Zep edge search still failing after {max_retries} attempts: {e}")
+                        logger.debug(f"Memory {label} still failing after 3 attempts: {e}")
             return None
+
+        def search_edges():
+            return _retry(
+                lambda: memory_service.search_edges(group_id=self.graph_id, query=comprehensive_query, limit=30),
+                "edge search",
+            )
 
         def search_nodes():
-            """Search nodes (entity summaries) with retry"""
-            max_retries = 3
-            last_exception = None
-            delay = 2.0
-
-            for attempt in range(max_retries):
-                try:
-                    return self.zep_client.graph.search(
-                        query=comprehensive_query,
-                        graph_id=self.graph_id,
-                        limit=20,
-                        scope="nodes",
-                        reranker="rrf"
-                    )
-                except Exception as e:
-                    last_exception = e
-                    if attempt < max_retries - 1:
-                        logger.debug(f"Zep node search attempt {attempt + 1} failed: {str(e)[:80]}, retrying...")
-                        time.sleep(delay)
-                        delay *= 2
-                    else:
-                        logger.debug(f"Zep node search still failing after {max_retries} attempts: {e}")
-            return None
+            return _retry(
+                lambda: memory_service.search_nodes(group_id=self.graph_id, query=comprehensive_query, limit=20),
+                "node search",
+            )
 
         try:
             # Run edge and node searches in parallel
@@ -378,19 +354,19 @@ class OasisProfileGenerator:
 
             # Process edge search results
             all_facts = set()
-            if edge_result and hasattr(edge_result, 'edges') and edge_result.edges:
-                for edge in edge_result.edges:
-                    if hasattr(edge, 'fact') and edge.fact:
+            if edge_result:
+                for edge in edge_result:
+                    if edge.fact:
                         all_facts.add(edge.fact)
             results["facts"] = list(all_facts)
 
             # Process node search results
             all_summaries = set()
-            if node_result and hasattr(node_result, 'nodes') and node_result.nodes:
-                for node in node_result.nodes:
-                    if hasattr(node, 'summary') and node.summary:
+            if node_result:
+                for node in node_result:
+                    if node.summary:
                         all_summaries.add(node.summary)
-                    if hasattr(node, 'name') and node.name and node.name != entity_name:
+                    if node.name and node.name != entity_name:
                         all_summaries.add(f"Verwandte Entität: {node.name}")
             results["node_summaries"] = list(all_summaries)
 
