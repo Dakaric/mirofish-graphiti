@@ -10,8 +10,7 @@ import threading
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 
-from zep_cloud.client import Zep
-from zep_cloud import EpisodeData, EntityEdgeSourceTarget
+from app.adapters.graphiti_compat import Zep, EpisodeData, EntityEdgeSourceTarget
 
 from ..config import Config
 from ..models.task import TaskManager, TaskStatus
@@ -207,7 +206,7 @@ class GraphBuilderService:
         import warnings
         from typing import Optional
         from pydantic import Field
-        from zep_cloud.external_clients.ontology import EntityModel, EntityText, EdgeModel
+        from app.adapters.graphiti_compat import EntityModel, EntityText, EdgeModel
 
         # Suppress Pydantic v2 warnings about Field(default=None);
         # this usage is required by the Zep SDK and the warning comes from dynamic class creation.

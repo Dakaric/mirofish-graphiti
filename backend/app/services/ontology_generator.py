@@ -414,7 +414,7 @@ Entwerfen Sie auf Grundlage des obigen Inhalts Entitäts- und Relationstypen, di
             '"""',
             '',
             'from pydantic import Field',
-            'from zep_cloud.external_clients.ontology import EntityModel, EntityText, EdgeModel',
+            'from app.adapters.graphiti_compat import EntityModel, EntityText, EdgeModel',
             '',
             '',
             '# ============== Entity type definitions ==============',

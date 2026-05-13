@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from queue import Queue, Empty
 
-from zep_cloud.client import Zep
+from app.adapters.graphiti_compat import Zep
 
 from ..config import Config
 from ..utils.logger import get_logger

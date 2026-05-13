@@ -11,8 +11,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from zep_cloud import InternalServerError
-from zep_cloud.client import Zep
+from app.adapters.graphiti_compat import InternalServerError, Zep
 
 from .logger import get_logger
 

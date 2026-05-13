@@ -16,8 +16,11 @@ dependencies = [
     # LLM
     "openai>=1.0.0",
 
-    # Zep Cloud
-    "zep-cloud==3.13.0",
+    # Self-hosted temporal knowledge graph (replaces Zep Cloud).
+    # neo4j driver version is pinned by camel-oasis (==5.23.0); the Bolt protocol
+    # is backwards-compatible so we still run Neo4j 5.26+ on the server side.
+    "graphiti-core>=0.29.0",
+    "neo4j>=5.23",
 
     # OASIS social-media simulation
     "camel-oasis==0.2.5",
@@ -44,6 +47,14 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# camel-oasis pins neo4j==5.23.0; graphiti-core requires >=5.26.
+# Override to graphiti-core's range — the Python driver is API-stable across
+# this gap and we still run Neo4j 5.26 server-side via docker compose.
+[tool.uv]
+override-dependencies = [
+    "neo4j>=5.23,<6.0",
+]
 
 [dependency-groups]
 dev = [
