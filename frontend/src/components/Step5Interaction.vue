@@ -10,6 +10,26 @@
             <div class="report-meta">
               <span class="report-tag">Prediction Report</span>
               <span class="report-id">ID: {{ reportId || 'REF-2024-X92' }}</span>
+              <div class="report-actions" v-if="reportId">
+                <button class="download-btn" :disabled="isDownloading"
+                        @click="handleDownload('md')" :title="$t('step5.downloadMd')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>{{ $t('step5.downloadMd') }}</span>
+                </button>
+                <button class="download-btn download-btn-primary" :disabled="isDownloading"
+                        @click="handleDownload('pdf')" :title="$t('step5.downloadPdf')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>{{ $t('step5.downloadPdf') }}</span>
+                </button>
+              </div>
             </div>
             <h1 class="main-title">{{ reportOutline.title }}</h1>
             <p class="sub-title">{{ reportOutline.summary }}</p>
@@ -413,7 +433,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { chatWithReport, getReport, getAgentLog } from '../api/report'
+import { chatWithReport, getReport, getAgentLog, downloadReport } from '../api/report'
 import { interviewAgents, getSimulationProfilesRealtime } from '../api/simulation'
 
 const { t } = useI18n()
@@ -441,6 +461,22 @@ const chatHistoryCache = ref({}) // Cache aller Chatverläufe: { 'report_agent':
 const isSending = ref(false)
 const chatMessages = ref(null)
 const chatInputRef = ref(null)
+
+// Download State
+const isDownloading = ref(false)
+
+const handleDownload = async (format) => {
+  if (!props.reportId || isDownloading.value) return
+  isDownloading.value = true
+  try {
+    await downloadReport(props.reportId, format)
+  } catch (err) {
+    console.error('Download failed:', err)
+    emit('add-log', { type: 'error', message: t('step5.downloadFailed', { format: format.toUpperCase() }) })
+  } finally {
+    isDownloading.value = false
+  }
+}
 
 // Survey State
 const selectedAgents = ref(new Set())
@@ -1050,6 +1086,50 @@ watch(() => props.simulationId, (newId) => {
   color: #9CA3AF;
   font-weight: 500;
   letter-spacing: 0.02em;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: #FFFFFF;
+  color: #1F2937;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.download-btn:hover:not(:disabled) {
+  background: #F9FAFB;
+  border-color: #9CA3AF;
+}
+
+.download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.download-btn-primary {
+  background: #111827;
+  color: #FFFFFF;
+  border-color: #111827;
+}
+
+.download-btn-primary:hover:not(:disabled) {
+  background: #1F2937;
+  border-color: #1F2937;
+  color: #FFFFFF;
 }
 
 .main-title {

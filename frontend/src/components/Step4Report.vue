@@ -10,6 +10,26 @@
             <div class="report-meta">
               <span class="report-tag">Prediction Report</span>
               <span class="report-id">ID: {{ reportId || 'REF-2024-X92' }}</span>
+              <div class="report-actions" v-if="reportId && isReportComplete">
+                <button class="download-btn" :disabled="isDownloading"
+                        @click="handleDownload('md')" :title="$t('step5.downloadMd')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>{{ $t('step5.downloadMd') }}</span>
+                </button>
+                <button class="download-btn download-btn-primary" :disabled="isDownloading"
+                        @click="handleDownload('pdf')" :title="$t('step5.downloadPdf')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>{{ $t('step5.downloadPdf') }}</span>
+                </button>
+              </div>
             </div>
             <h1 class="main-title">{{ reportOutline.title }}</h1>
             <p class="sub-title">{{ reportOutline.summary }}</p>
@@ -393,7 +413,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getAgentLog, getConsoleLog } from '../api/report'
+import { getAgentLog, getConsoleLog, downloadReport } from '../api/report'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -426,6 +446,27 @@ const expandedLogs = ref(new Set())
 const collapsedSections = ref(new Set())
 const isComplete = ref(false)
 const startTime = ref(null)
+const isDownloading = ref(false)
+
+const isReportComplete = computed(() => {
+  if (isComplete.value) return true
+  if (!reportOutline.value?.sections?.length) return false
+  return reportOutline.value.sections.every((_, i) => !!generatedSections.value[i + 1])
+})
+
+const handleDownload = async (format) => {
+  if (!props.reportId || isDownloading.value) return
+  isDownloading.value = true
+  try {
+    await downloadReport(props.reportId, format)
+  } catch (err) {
+    console.error('Download failed:', err)
+    emit('add-log', { type: 'error', message: t('step5.downloadFailed', { format: format.toUpperCase() }) })
+  } finally {
+    isDownloading.value = false
+  }
+}
+
 const leftPanel = ref(null)
 const rightPanel = ref(null)
 const logContent = ref(null)
@@ -2381,6 +2422,50 @@ watch(() => props.reportId, (newId) => {
   color: #9CA3AF;
   font-weight: 500;
   letter-spacing: 0.02em;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: #FFFFFF;
+  color: #1F2937;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.download-btn:hover:not(:disabled) {
+  background: #F9FAFB;
+  border-color: #9CA3AF;
+}
+
+.download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.download-btn-primary {
+  background: #111827;
+  color: #FFFFFF;
+  border-color: #111827;
+}
+
+.download-btn-primary:hover:not(:disabled) {
+  background: #1F2937;
+  border-color: #1F2937;
+  color: #FFFFFF;
 }
 
 .main-title {
