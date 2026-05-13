@@ -510,7 +510,7 @@ class ZepToolsService:
 
             if scope in ("edges", "both"):
                 edge_hits = self._call_with_retry(
-                    func=lambda: memory_service.search_edges(graph_id=graph_id, query=query, limit=limit),
+                    func=lambda: memory_service.search_edges(group_id=graph_id, query=query, limit=limit),
                     operation_name=t("console.graphSearchOp", graphId=graph_id),
                 )
                 for edge in edge_hits:
@@ -526,7 +526,7 @@ class ZepToolsService:
 
             if scope in ("nodes", "both"):
                 node_hits = self._call_with_retry(
-                    func=lambda: memory_service.search_nodes(graph_id=graph_id, query=query, limit=limit),
+                    func=lambda: memory_service.search_nodes(group_id=graph_id, query=query, limit=limit),
                     operation_name=t("console.graphSearchOp", graphId=graph_id),
                 )
                 for node in node_hits:
