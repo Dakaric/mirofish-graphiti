@@ -284,10 +284,12 @@ def build_graph():
     try:
         logger.info("=== Starting graph build ===")
 
-        # Validate config
+        # Validate config (Graphiti+Neo4j replaces Zep Cloud)
         errors = []
-        if not Config.ZEP_API_KEY:
-            errors.append(t('api.zepApiKeyMissing'))
+        if not Config.NEO4J_PASSWORD:
+            errors.append("NEO4J_PASSWORD is not configured")
+        if not Config.LLM_API_KEY:
+            errors.append("LLM_API_KEY is not configured")
         if errors:
             logger.error(f"Config error: {errors}")
             return jsonify({

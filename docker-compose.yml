@@ -36,6 +36,8 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/uploads:/app/backend/uploads
+      # Dev-bind: live-edit backend code without rebuilding the image during the migration PoC.
+      - ./backend/app:/app/backend/app
     networks: [mirofish]
 
 volumes:

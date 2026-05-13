@@ -354,20 +354,42 @@ class _GraphClient:
         entities: dict[str, type[BaseModel]] | None = None,
         edges: dict[str, tuple[type[BaseModel], list[EntityEdgeSourceTarget]]] | None = None,
     ) -> None:
+        # Zep accepts edges as {name: (Model, [EntityEdgeSourceTarget(...)])}.
+        # Graphiti splits this into edge_types (just the Model) and edge_type_map
+        # ({(source_label, target_label): [edge_name]}). Translate once at
+        # ontology-registration time so every add_episode call is cheap.
+        edge_types: dict[str, type[BaseModel]] = {}
+        edge_type_map: dict[tuple[str, str], list[str]] = {}
+        for edge_name, value in (edges or {}).items():
+            if isinstance(value, tuple) and len(value) == 2:
+                edge_class, source_targets = value
+            else:
+                edge_class, source_targets = value, []
+            edge_types[edge_name] = edge_class
+            for st in source_targets:
+                src = getattr(st, "source", "Entity")
+                tgt = getattr(st, "target", "Entity")
+                edge_type_map.setdefault((src, tgt), []).append(edge_name)
+
         for graph_id in graph_ids:
             _ontologies[graph_id] = {
                 "entities": entities or {},
-                "edges": edges or {},
+                "edge_types": edge_types,
+                "edge_type_map": edge_type_map,
             }
         logger.info(
-            "graph.set_ontology graph_ids=%s entities=%d edges=%d",
+            "graph.set_ontology graph_ids=%s entities=%d edges=%d edge_type_map_entries=%d",
             graph_ids,
             len(entities or {}),
-            len(edges or {}),
+            len(edge_types),
+            len(edge_type_map),
         )
 
     def _ontology_for(self, graph_id: str) -> dict[str, Any]:
-        return _ontologies.get(graph_id, {"entities": {}, "edges": {}})
+        return _ontologies.get(
+            graph_id,
+            {"entities": {}, "edge_types": {}, "edge_type_map": {}},
+        )
 
     # -- ingestion -----------------------------------------------------------
 
@@ -384,7 +406,8 @@ class _GraphClient:
                 reference_time=datetime.now(timezone.utc),
                 group_id=graph_id,
                 entity_types=ontology["entities"] or None,
-                edge_types=ontology["edges"] or None,
+                edge_types=ontology["edge_types"] or None,
+                edge_type_map=ontology["edge_type_map"] or None,
             )
             uid = _ep_uuid(result)
             if uid:
@@ -410,7 +433,8 @@ class _GraphClient:
                     reference_time=datetime.now(timezone.utc),
                     group_id=graph_id,
                     entity_types=ontology["entities"] or None,
-                    edge_types=ontology["edges"] or None,
+                    edge_types=ontology["edge_types"] or None,
+                    edge_type_map=ontology["edge_type_map"] or None,
                 )
                 uid = _ep_uuid(result)
                 if uid:

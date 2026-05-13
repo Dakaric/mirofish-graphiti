@@ -36,6 +36,13 @@ class Config:
     NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7688')
     NEO4J_USER = os.environ.get('NEO4J_USER', 'neo4j')
     NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD')
+
+    # Backwards-compat: existing services still read Config.ZEP_API_KEY for
+    # truthy guard clauses and pass it into Zep(api_key=...). Our adapter
+    # ignores the value entirely — but we still need it to be truthy so the
+    # guards in api/graph.py, api/simulation.py and the services don't bail.
+    ZEP_API_KEY = LLM_API_KEY or 'graphiti-adapter'
+
     # Graphiti's default cross-encoder reads OPENAI_API_KEY directly from env.
     # When using OpenAI as the LLM, mirror LLM_API_KEY into OPENAI_API_KEY.
     if not os.environ.get('OPENAI_API_KEY') and os.environ.get('LLM_API_KEY'):
