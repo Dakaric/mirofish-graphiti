@@ -1,6 +1,6 @@
 """
-本体生成服务
-接口1：分析文本内容，生成适合社会模拟的实体和关系类型定义
+Ontology generation service
+Endpoint 1: Analyzes text content and generates entity and relationship type definitions for social simulation.
 """
 
 import json
@@ -14,174 +14,174 @@ logger = logging.getLogger(__name__)
 
 
 def _to_pascal_case(name: str) -> str:
-    """将任意格式的名称转换为 PascalCase（如 'works_for' -> 'WorksFor', 'person' -> 'Person'）"""
-    # 按非字母数字字符分割
+    """Convert any-format name to PascalCase (e.g. 'works_for' -> 'WorksFor', 'person' -> 'Person')."""
+    # Split by non-alphanumeric characters
     parts = re.split(r'[^a-zA-Z0-9]+', name)
-    # 再按 camelCase 边界分割（如 'camelCase' -> ['camel', 'Case']）
+    # Then split on camelCase boundaries (e.g. 'camelCase' -> ['camel', 'Case'])
     words = []
     for part in parts:
         words.extend(re.sub(r'([a-z])([A-Z])', r'\1_\2', part).split('_'))
-    # 每个词首字母大写，过滤空串
+    # Capitalize each word and drop empties
     result = ''.join(word.capitalize() for word in words if word)
     return result if result else 'Unknown'
 
 
-# 本体生成的系统提示词
-ONTOLOGY_SYSTEM_PROMPT = """你是一个专业的知识图谱本体设计专家。你的任务是分析给定的文本内容和模拟需求，设计适合**社交媒体舆论模拟**的实体类型和关系类型。
+# System prompt for ontology generation
+ONTOLOGY_SYSTEM_PROMPT = """Sie sind ein professioneller Experte für die Gestaltung von Wissensgraph-Ontologien. Ihre Aufgabe ist es, den gegebenen Textinhalt und die Simulationsanforderungen zu analysieren und Entitätstypen sowie Relationstypen zu entwerfen, die für eine **Social-Media-Meinungssimulation** geeignet sind.
 
-**重要：你必须输出有效的JSON格式数据，不要输出任何其他内容。**
+**Wichtig: Sie müssen gültige JSON-Daten ausgeben, keinen anderen Inhalt.**
 
-## 核心任务背景
+## Hintergrund der Kernaufgabe
 
-我们正在构建一个**社交媒体舆论模拟系统**。在这个系统中：
-- 每个实体都是一个可以在社交媒体上发声、互动、传播信息的"账号"或"主体"
-- 实体之间会相互影响、转发、评论、回应
-- 我们需要模拟舆论事件中各方的反应和信息传播路径
+Wir bauen ein **Social-Media-Meinungssimulationssystem**. In diesem System gilt:
+- Jede Entität ist ein "Account" oder "Akteur", der sich in sozialen Medien äußern, interagieren und Informationen verbreiten kann
+- Entitäten beeinflussen sich gegenseitig, teilen, kommentieren und reagieren aufeinander
+- Wir müssen die Reaktionen aller Beteiligten in Meinungsereignissen und die Pfade der Informationsverbreitung simulieren
 
-因此，**实体必须是现实中真实存在的、可以在社媒上发声和互动的主体**：
+Daher **müssen Entitäten reale Akteure sein, die sich in sozialen Medien äußern und interagieren können**:
 
-**可以是**：
-- 具体的个人（公众人物、当事人、意见领袖、专家学者、普通人）
-- 公司、企业（包括其官方账号）
-- 组织机构（大学、协会、NGO、工会等）
-- 政府部门、监管机构
-- 媒体机构（报纸、电视台、自媒体、网站）
-- 社交媒体平台本身
-- 特定群体代表（如校友会、粉丝团、维权群体等）
+**Erlaubt sind**:
+- Konkrete Einzelpersonen (Personen des öffentlichen Lebens, Beteiligte, Meinungsführer, Fachleute, Privatpersonen)
+- Firmen, Unternehmen (inkl. ihrer offiziellen Accounts)
+- Organisationen (Universitäten, Verbände, NGOs, Gewerkschaften usw.)
+- Behörden, Aufsichtsorgane
+- Medienorganisationen (Zeitungen, Fernsehsender, Self-Media, Webseiten)
+- Social-Media-Plattformen selbst
+- Vertretungen bestimmter Gruppen (z. B. Alumni-Vereinigungen, Fanclubs, Aktivistengruppen)
 
-**不可以是**：
-- 抽象概念（如"舆论"、"情绪"、"趋势"）
-- 主题/话题（如"学术诚信"、"教育改革"）
-- 观点/态度（如"支持方"、"反对方"）
+**Nicht erlaubt sind**:
+- Abstrakte Konzepte (z. B. "öffentliche Meinung", "Stimmung", "Trend")
+- Themen (z. B. "wissenschaftliche Integrität", "Bildungsreform")
+- Standpunkte/Haltungen (z. B. "Befürworter", "Gegner")
 
-## 输出格式
+## Ausgabeformat
 
-请输出JSON格式，包含以下结构：
+Geben Sie JSON in folgender Struktur aus:
 
 ```json
 {
     "entity_types": [
         {
-            "name": "实体类型名称（英文，PascalCase）",
-            "description": "简短描述（英文，不超过100字符）",
+            "name": "Entitätstyp-Name (englisch, PascalCase)",
+            "description": "Kurzbeschreibung (englisch, max. 100 Zeichen)",
             "attributes": [
                 {
-                    "name": "属性名（英文，snake_case）",
+                    "name": "Attributname (englisch, snake_case)",
                     "type": "text",
-                    "description": "属性描述"
+                    "description": "Attributbeschreibung"
                 }
             ],
-            "examples": ["示例实体1", "示例实体2"]
+            "examples": ["Beispielentität 1", "Beispielentität 2"]
         }
     ],
     "edge_types": [
         {
-            "name": "关系类型名称（英文，UPPER_SNAKE_CASE）",
-            "description": "简短描述（英文，不超过100字符）",
+            "name": "Relationstyp-Name (englisch, UPPER_SNAKE_CASE)",
+            "description": "Kurzbeschreibung (englisch, max. 100 Zeichen)",
             "source_targets": [
-                {"source": "源实体类型", "target": "目标实体类型"}
+                {"source": "Quell-Entitätstyp", "target": "Ziel-Entitätstyp"}
             ],
             "attributes": []
         }
     ],
-    "analysis_summary": "对文本内容的简要分析说明"
+    "analysis_summary": "Kurze Analyse des Textinhalts"
 }
 ```
 
-## 设计指南（极其重要！）
+## Designrichtlinien (extrem wichtig!)
 
-### 1. 实体类型设计 - 必须严格遵守
+### 1. Entwurf der Entitätstypen — strikt einzuhalten
 
-**数量要求：必须正好10个实体类型**
+**Anzahl: exakt 10 Entitätstypen erforderlich**
 
-**层次结构要求（必须同时包含具体类型和兜底类型）**：
+**Hierarchische Anforderungen (muss konkrete Typen UND Fallback-Typen enthalten)**:
 
-你的10个实体类型必须包含以下层次：
+Ihre 10 Entitätstypen müssen folgende Hierarchie umfassen:
 
-A. **兜底类型（必须包含，放在列表最后2个）**：
-   - `Person`: 任何自然人个体的兜底类型。当一个人不属于其他更具体的人物类型时，归入此类。
-   - `Organization`: 任何组织机构的兜底类型。当一个组织不属于其他更具体的组织类型时，归入此类。
+A. **Fallback-Typen (zwingend, an den letzten 2 Positionen der Liste)**:
+   - `Person`: Fallback für jede natürliche Person. Wenn eine Person zu keinem konkreteren Personentyp passt, ordnen Sie sie hier ein.
+   - `Organization`: Fallback für jede Organisation. Wenn eine Organisation zu keinem konkreteren Organisationstyp passt, ordnen Sie sie hier ein.
 
-B. **具体类型（8个，根据文本内容设计）**：
-   - 针对文本中出现的主要角色，设计更具体的类型
-   - 例如：如果文本涉及学术事件，可以有 `Student`, `Professor`, `University`
-   - 例如：如果文本涉及商业事件，可以有 `Company`, `CEO`, `Employee`
+B. **Konkrete Typen (8 Stück, basierend auf dem Textinhalt)**:
+   - Entwerfen Sie konkretere Typen für die Hauptrollen im Text
+   - Beispiel: Bei akademischen Vorgängen können das `Student`, `Professor`, `University` sein
+   - Beispiel: Bei wirtschaftlichen Vorgängen können das `Company`, `CEO`, `Employee` sein
 
-**为什么需要兜底类型**：
-- 文本中会出现各种人物，如"中小学教师"、"路人甲"、"某位网友"
-- 如果没有专门的类型匹配，他们应该被归入 `Person`
-- 同理，小型组织、临时团体等应该归入 `Organization`
+**Warum Fallback-Typen nötig sind**:
+- Im Text tauchen verschiedenste Personen auf, etwa "Schullehrer", "Passant", "ein Internetnutzer"
+- Wenn kein spezialisierter Typ passt, sollten sie in `Person` einsortiert werden
+- Analog gehören kleine Organisationen oder temporäre Gruppen in `Organization`
 
-**具体类型的设计原则**：
-- 从文本中识别出高频出现或关键的角色类型
-- 每个具体类型应该有明确的边界，避免重叠
-- description 必须清晰说明这个类型和兜底类型的区别
+**Designprinzipien für konkrete Typen**:
+- Identifizieren Sie häufig auftretende oder zentrale Rollentypen aus dem Text
+- Jeder konkrete Typ muss klar abgegrenzt sein, Überschneidungen vermeiden
+- Die description muss klar erklären, wie sich dieser Typ vom Fallback-Typ unterscheidet
 
-### 2. 关系类型设计
+### 2. Entwurf der Relationstypen
 
-- 数量：6-10个
-- 关系应该反映社媒互动中的真实联系
-- 确保关系的 source_targets 涵盖你定义的实体类型
+- Anzahl: 6-10
+- Relationen sollen reale Verbindungen in Social-Media-Interaktionen abbilden
+- Stellen Sie sicher, dass die source_targets der Relationen die definierten Entitätstypen abdecken
 
-### 3. 属性设计
+### 3. Attributentwurf
 
-- 每个实体类型1-3个关键属性
-- **注意**：属性名不能使用 `name`、`uuid`、`group_id`、`created_at`、`summary`（这些是系统保留字）
-- 推荐使用：`full_name`, `title`, `role`, `position`, `location`, `description` 等
+- 1-3 Schlüsselattribute pro Entitätstyp
+- **Hinweis**: Attributnamen dürfen nicht `name`, `uuid`, `group_id`, `created_at`, `summary` lauten (das sind reservierte Systembegriffe)
+- Empfohlen: `full_name`, `title`, `role`, `position`, `location`, `description` etc.
 
-## 实体类型参考
+## Referenz für Entitätstypen
 
-**个人类（具体）**：
-- Student: 学生
-- Professor: 教授/学者
-- Journalist: 记者
-- Celebrity: 明星/网红
-- Executive: 高管
-- Official: 政府官员
-- Lawyer: 律师
-- Doctor: 医生
+**Personen (konkret)**:
+- Student: Studierende
+- Professor: Professor/Wissenschaftler
+- Journalist: Journalist
+- Celebrity: Prominenter/Influencer
+- Executive: Führungskraft
+- Official: Regierungsbeamter
+- Lawyer: Anwalt
+- Doctor: Arzt
 
-**个人类（兜底）**：
-- Person: 任何自然人（不属于上述具体类型时使用）
+**Personen (Fallback)**:
+- Person: Jede natürliche Person (verwenden, wenn kein konkreter Typ passt)
 
-**组织类（具体）**：
-- University: 高校
-- Company: 公司企业
-- GovernmentAgency: 政府机构
-- MediaOutlet: 媒体机构
-- Hospital: 医院
-- School: 中小学
-- NGO: 非政府组织
+**Organisationen (konkret)**:
+- University: Hochschule
+- Company: Unternehmen
+- GovernmentAgency: Behörde
+- MediaOutlet: Medienorganisation
+- Hospital: Krankenhaus
+- School: Schule
+- NGO: Nichtregierungsorganisation
 
-**组织类（兜底）**：
-- Organization: 任何组织机构（不属于上述具体类型时使用）
+**Organisationen (Fallback)**:
+- Organization: Jede Organisation (verwenden, wenn kein konkreter Typ passt)
 
-## 关系类型参考
+## Referenz für Relationstypen
 
-- WORKS_FOR: 工作于
-- STUDIES_AT: 就读于
-- AFFILIATED_WITH: 隶属于
-- REPRESENTS: 代表
-- REGULATES: 监管
-- REPORTS_ON: 报道
-- COMMENTS_ON: 评论
-- RESPONDS_TO: 回应
-- SUPPORTS: 支持
-- OPPOSES: 反对
-- COLLABORATES_WITH: 合作
-- COMPETES_WITH: 竞争
+- WORKS_FOR: arbeitet bei
+- STUDIES_AT: studiert an
+- AFFILIATED_WITH: zugehörig zu
+- REPRESENTS: vertritt
+- REGULATES: reguliert
+- REPORTS_ON: berichtet über
+- COMMENTS_ON: kommentiert
+- RESPONDS_TO: reagiert auf
+- SUPPORTS: unterstützt
+- OPPOSES: lehnt ab
+- COLLABORATES_WITH: kollaboriert mit
+- COMPETES_WITH: konkurriert mit
 """
 
 
 class OntologyGenerator:
     """
-    本体生成器
-    分析文本内容，生成实体和关系类型定义
+    Ontology generator.
+    Analyzes text content and generates entity and relationship type definitions.
     """
-    
+
     def __init__(self, llm_client: Optional[LLMClient] = None):
         self.llm_client = llm_client or LLMClient()
-    
+
     def generate(
         self,
         document_texts: List[str],
@@ -189,107 +189,107 @@ class OntologyGenerator:
         additional_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        生成本体定义
-        
+        Generate an ontology definition.
+
         Args:
-            document_texts: 文档文本列表
-            simulation_requirement: 模拟需求描述
-            additional_context: 额外上下文
-            
+            document_texts: List of document texts
+            simulation_requirement: Simulation requirement description
+            additional_context: Additional context
+
         Returns:
-            本体定义（entity_types, edge_types等）
+            Ontology definition (entity_types, edge_types, ...)
         """
-        # 构建用户消息
+        # Build the user message
         user_message = self._build_user_message(
-            document_texts, 
+            document_texts,
             simulation_requirement,
             additional_context
         )
-        
+
         lang_instruction = get_language_instruction()
         system_prompt = f"{ONTOLOGY_SYSTEM_PROMPT}\n\n{lang_instruction}\nIMPORTANT: Entity type names MUST be in English PascalCase (e.g., 'PersonEntity', 'MediaOrganization'). Relationship type names MUST be in English UPPER_SNAKE_CASE (e.g., 'WORKS_FOR'). Attribute names MUST be in English snake_case. Only description fields and analysis_summary should use the specified language above."
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
         ]
-        
-        # 调用LLM
+
+        # Call the LLM
         result = self.llm_client.chat_json(
             messages=messages,
             temperature=0.3,
             max_tokens=4096
         )
-        
-        # 验证和后处理
+
+        # Validate and post-process
         result = self._validate_and_process(result)
-        
+
         return result
-    
-    # 传给 LLM 的文本最大长度（5万字）
+
+    # Maximum text length passed to the LLM (50k characters)
     MAX_TEXT_LENGTH_FOR_LLM = 50000
-    
+
     def _build_user_message(
         self,
         document_texts: List[str],
         simulation_requirement: str,
         additional_context: Optional[str]
     ) -> str:
-        """构建用户消息"""
-        
-        # 合并文本
+        """Build the user message"""
+
+        # Concatenate the texts
         combined_text = "\n\n---\n\n".join(document_texts)
         original_length = len(combined_text)
-        
-        # 如果文本超过5万字，截断（仅影响传给LLM的内容，不影响图谱构建）
+
+        # If the text exceeds 50k characters, truncate (only affects what is sent to the LLM, not graph building)
         if len(combined_text) > self.MAX_TEXT_LENGTH_FOR_LLM:
             combined_text = combined_text[:self.MAX_TEXT_LENGTH_FOR_LLM]
-            combined_text += f"\n\n...(原文共{original_length}字，已截取前{self.MAX_TEXT_LENGTH_FOR_LLM}字用于本体分析)..."
-        
-        message = f"""## 模拟需求
+            combined_text += f"\n\n...(Originaltext umfasst {original_length} Zeichen, die ersten {self.MAX_TEXT_LENGTH_FOR_LLM} Zeichen wurden zur Ontologie-Analyse übernommen)..."
+
+        message = f"""## Simulationsanforderung
 
 {simulation_requirement}
 
-## 文档内容
+## Dokumentinhalt
 
 {combined_text}
 """
-        
+
         if additional_context:
             message += f"""
-## 额外说明
+## Zusätzliche Hinweise
 
 {additional_context}
 """
-        
-        message += """
-请根据以上内容，设计适合社会舆论模拟的实体类型和关系类型。
 
-**必须遵守的规则**：
-1. 必须正好输出10个实体类型
-2. 最后2个必须是兜底类型：Person（个人兜底）和 Organization（组织兜底）
-3. 前8个是根据文本内容设计的具体类型
-4. 所有实体类型必须是现实中可以发声的主体，不能是抽象概念
-5. 属性名不能使用 name、uuid、group_id 等保留字，用 full_name、org_name 等替代
+        message += """
+Entwerfen Sie auf Grundlage des obigen Inhalts Entitäts- und Relationstypen, die für eine Social-Media-Meinungssimulation geeignet sind.
+
+**Verbindliche Regeln**:
+1. Geben Sie genau 10 Entitätstypen aus
+2. Die letzten 2 müssen Fallback-Typen sein: Person (Personen-Fallback) und Organization (Organisations-Fallback)
+3. Die ersten 8 sind konkrete, am Textinhalt orientierte Typen
+4. Alle Entitätstypen müssen reale, sich äußernde Akteure sein, keine abstrakten Konzepte
+5. Attributnamen dürfen nicht name, uuid, group_id u. ä. reservierte Begriffe verwenden; nutzen Sie stattdessen z. B. full_name, org_name
 """
-        
+
         return message
-    
+
     def _validate_and_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """验证和后处理结果"""
-        
-        # 确保必要字段存在
+        """Validate and post-process the result"""
+
+        # Ensure required fields exist
         if "entity_types" not in result:
             result["entity_types"] = []
         if "edge_types" not in result:
             result["edge_types"] = []
         if "analysis_summary" not in result:
             result["analysis_summary"] = ""
-        
-        # 验证实体类型
-        # 记录原始名称到 PascalCase 的映射，用于后续修正 edge 的 source_targets 引用
+
+        # Validate entity types
+        # Track original-name -> PascalCase mapping to fix edge source_targets references later
         entity_name_map = {}
         for entity in result["entity_types"]:
-            # 强制将 entity name 转为 PascalCase（Zep API 要求）
+            # Force entity name to PascalCase (required by Zep API)
             if "name" in entity:
                 original_name = entity["name"]
                 entity["name"] = _to_pascal_case(original_name)
@@ -300,19 +300,19 @@ class OntologyGenerator:
                 entity["attributes"] = []
             if "examples" not in entity:
                 entity["examples"] = []
-            # 确保description不超过100字符
+            # Cap description length at 100 characters
             if len(entity.get("description", "")) > 100:
                 entity["description"] = entity["description"][:97] + "..."
-        
-        # 验证关系类型
+
+        # Validate edge types
         for edge in result["edge_types"]:
-            # 强制将 edge name 转为 SCREAMING_SNAKE_CASE（Zep API 要求）
+            # Force edge name to SCREAMING_SNAKE_CASE (required by Zep API)
             if "name" in edge:
                 original_name = edge["name"]
                 edge["name"] = original_name.upper()
                 if edge["name"] != original_name:
                     logger.warning(f"Edge type name '{original_name}' auto-converted to '{edge['name']}'")
-            # 修正 source_targets 中的实体名称引用，与转换后的 PascalCase 保持一致
+            # Fix entity references in source_targets to match the converted PascalCase
             for st in edge.get("source_targets", []):
                 if st.get("source") in entity_name_map:
                     st["source"] = entity_name_map[st["source"]]
@@ -324,12 +324,12 @@ class OntologyGenerator:
                 edge["attributes"] = []
             if len(edge.get("description", "")) > 100:
                 edge["description"] = edge["description"][:97] + "..."
-        
-        # Zep API 限制：最多 10 个自定义实体类型，最多 10 个自定义边类型
+
+        # Zep API limits: at most 10 custom entity types and 10 custom edge types
         MAX_ENTITY_TYPES = 10
         MAX_EDGE_TYPES = 10
 
-        # 去重：按 name 去重，保留首次出现的
+        # Deduplicate by name, keeping the first occurrence
         seen_names = set()
         deduped = []
         for entity in result["entity_types"]:
@@ -341,7 +341,7 @@ class OntologyGenerator:
                 logger.warning(f"Duplicate entity type '{name}' removed during validation")
         result["entity_types"] = deduped
 
-        # 兜底类型定义
+        # Fallback type definitions
         person_fallback = {
             "name": "Person",
             "description": "Any individual person not fitting other specific person types.",
@@ -351,7 +351,7 @@ class OntologyGenerator:
             ],
             "examples": ["ordinary citizen", "anonymous netizen"]
         }
-        
+
         organization_fallback = {
             "name": "Organization",
             "description": "Any organization not fitting other specific organization types.",
@@ -361,74 +361,74 @@ class OntologyGenerator:
             ],
             "examples": ["small business", "community group"]
         }
-        
-        # 检查是否已有兜底类型
+
+        # Check whether fallback types already exist
         entity_names = {e["name"] for e in result["entity_types"]}
         has_person = "Person" in entity_names
         has_organization = "Organization" in entity_names
-        
-        # 需要添加的兜底类型
+
+        # Fallback types that need to be added
         fallbacks_to_add = []
         if not has_person:
             fallbacks_to_add.append(person_fallback)
         if not has_organization:
             fallbacks_to_add.append(organization_fallback)
-        
+
         if fallbacks_to_add:
             current_count = len(result["entity_types"])
             needed_slots = len(fallbacks_to_add)
-            
-            # 如果添加后会超过 10 个，需要移除一些现有类型
+
+            # If adding pushes past 10, drop existing types
             if current_count + needed_slots > MAX_ENTITY_TYPES:
-                # 计算需要移除多少个
+                # Compute how many to remove
                 to_remove = current_count + needed_slots - MAX_ENTITY_TYPES
-                # 从末尾移除（保留前面更重要的具体类型）
+                # Remove from the tail (preserve more important specific types at the front)
                 result["entity_types"] = result["entity_types"][:-to_remove]
-            
-            # 添加兜底类型
+
+            # Append fallback types
             result["entity_types"].extend(fallbacks_to_add)
-        
-        # 最终确保不超过限制（防御性编程）
+
+        # Defensive cap to ensure we never exceed limits
         if len(result["entity_types"]) > MAX_ENTITY_TYPES:
             result["entity_types"] = result["entity_types"][:MAX_ENTITY_TYPES]
-        
+
         if len(result["edge_types"]) > MAX_EDGE_TYPES:
             result["edge_types"] = result["edge_types"][:MAX_EDGE_TYPES]
-        
+
         return result
-    
+
     def generate_python_code(self, ontology: Dict[str, Any]) -> str:
         """
-        将本体定义转换为Python代码（类似ontology.py）
-        
+        Convert the ontology definition into Python code (similar to ontology.py).
+
         Args:
-            ontology: 本体定义
-            
+            ontology: Ontology definition
+
         Returns:
-            Python代码字符串
+            Python code string
         """
         code_lines = [
             '"""',
-            '自定义实体类型定义',
-            '由MiroFish自动生成，用于社会舆论模拟',
+            'Custom entity type definitions',
+            'Auto-generated by MiroFish for social opinion simulation.',
             '"""',
             '',
             'from pydantic import Field',
             'from zep_cloud.external_clients.ontology import EntityModel, EntityText, EdgeModel',
             '',
             '',
-            '# ============== 实体类型定义 ==============',
+            '# ============== Entity type definitions ==============',
             '',
         ]
-        
-        # 生成实体类型
+
+        # Generate entity types
         for entity in ontology.get("entity_types", []):
             name = entity["name"]
             desc = entity.get("description", f"A {name} entity.")
-            
+
             code_lines.append(f'class {name}(EntityModel):')
             code_lines.append(f'    """{desc}"""')
-            
+
             attrs = entity.get("attributes", [])
             if attrs:
                 for attr in attrs:
@@ -440,23 +440,23 @@ class OntologyGenerator:
                     code_lines.append(f'    )')
             else:
                 code_lines.append('    pass')
-            
+
             code_lines.append('')
             code_lines.append('')
-        
-        code_lines.append('# ============== 关系类型定义 ==============')
+
+        code_lines.append('# ============== Relationship type definitions ==============')
         code_lines.append('')
-        
-        # 生成关系类型
+
+        # Generate relationship types
         for edge in ontology.get("edge_types", []):
             name = edge["name"]
-            # 转换为PascalCase类名
+            # Convert to PascalCase class name
             class_name = ''.join(word.capitalize() for word in name.split('_'))
             desc = edge.get("description", f"A {name} relationship.")
-            
+
             code_lines.append(f'class {class_name}(EdgeModel):')
             code_lines.append(f'    """{desc}"""')
-            
+
             attrs = edge.get("attributes", [])
             if attrs:
                 for attr in attrs:
@@ -468,12 +468,12 @@ class OntologyGenerator:
                     code_lines.append(f'    )')
             else:
                 code_lines.append('    pass')
-            
+
             code_lines.append('')
             code_lines.append('')
-        
-        # 生成类型字典
-        code_lines.append('# ============== 类型配置 ==============')
+
+        # Generate type registries
+        code_lines.append('# ============== Type configuration ==============')
         code_lines.append('')
         code_lines.append('ENTITY_TYPES = {')
         for entity in ontology.get("entity_types", []):
@@ -488,8 +488,8 @@ class OntologyGenerator:
             code_lines.append(f'    "{name}": {class_name},')
         code_lines.append('}')
         code_lines.append('')
-        
-        # 生成边的source_targets映射
+
+        # Generate edge source_targets mapping
         code_lines.append('EDGE_SOURCE_TARGETS = {')
         for edge in ontology.get("edge_types", []):
             name = edge["name"]
@@ -501,6 +501,5 @@ class OntologyGenerator:
                 ])
                 code_lines.append(f'    "{name}": [{st_list}],')
         code_lines.append('}')
-        
-        return '\n'.join(code_lines)
 
+        return '\n'.join(code_lines)
