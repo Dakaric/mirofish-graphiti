@@ -248,6 +248,7 @@ def generate_ontology():
         })
         
     except Exception as e:
+        logger.exception("Ontology generation failed")
         return jsonify({
             "success": False,
             "error": str(e),
