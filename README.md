@@ -1,201 +1,128 @@
-<div align="center">
+# MiroFish-Graphiti
 
-<img src="./static/image/MiroFish_logo_compressed.jpeg" alt="MiroFish Logo" width="75%"/>
+Self-hosted Fork von **[MiroFish](https://github.com/666ghj/MiroFish)** — der Multi-Agent-Simulations-Engine von 666ghj/Shanda Group. Diese Variante ersetzt die Cloud-Memory-Schicht durch einen lokal laufenden Knowledge-Graph aus **[Graphiti](https://github.com/getzep/graphiti)** und **[Neo4j](https://neo4j.com/)**, sodass das gesamte System ohne externen Memory-Provider auskommt.
 
-<a href="https://trendshift.io/repositories/16144" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16144" alt="666ghj%2FMiroFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+> Upstream: **[github.com/666ghj/MiroFish](https://github.com/666ghj/MiroFish)** — alle Credits für Konzept, Frontend und das ursprüngliche Backend-Design gehen an das MiroFish-Team. Dieses Repo ist ein abgeleiteter Fork; die fachlichen Fähigkeiten (Graph Building → Simulation → Report → Interaction) stammen aus dem Original.
 
-<em>A Simple and Universal Swarm Intelligence Engine, Predicting Anything</em>
+## Worum geht's
 
-<a href="https://www.shanda.com/" target="_blank"><img src="./static/image/shanda_logo.png" alt="666ghj%2MiroFish | Shanda" height="40"/></a>
+MiroFish nimmt Seed-Material (News, Texte, Datenanalysen) und baut daraus eine simulierte Welt aus tausenden Agents mit eigener Persona, eigenem Gedächtnis und eigenen Beziehungen. Aus diesen Interaktionen entsteht ein Prediction-Report, der erklärt, wie sich ein Szenario plausibel entwickeln könnte. Nach der Simulation kann man mit einzelnen Agents oder dem ReportAgent weiterreden, um Ergebnisse zu vertiefen.
 
-[![GitHub Stars](https://img.shields.io/github/stars/666ghj/MiroFish?style=flat-square&color=DAA520)](https://github.com/666ghj/MiroFish/stargazers)
-[![GitHub Watchers](https://img.shields.io/github/watchers/666ghj/MiroFish?style=flat-square)](https://github.com/666ghj/MiroFish/watchers)
-[![GitHub Forks](https://img.shields.io/github/forks/666ghj/MiroFish?style=flat-square)](https://github.com/666ghj/MiroFish/network)
-[![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/666ghj/MiroFish)
+Der Workflow bleibt identisch zum Upstream:
 
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](http://discord.gg/ePf5aPaHnA)
-[![X](https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/mirofish_ai)
-[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?style=flat-square&logo=instagram&logoColor=white)](https://www.instagram.com/mirofish_ai/)
+1. **Graph Building** — Seeds extrahieren, GraphRAG aufbauen, Personas erzeugen
+2. **Environment Setup** — Entity-Relationen, Agent-Konfiguration
+3. **Simulation** — Parallele Multi-Agent-Läufe, dynamische Memory-Updates
+4. **Report Generation** — ReportAgent fasst die Simulation zusammen
+5. **Deep Interaction** — Chat mit Agents und ReportAgent
 
-[English](./README.md) | [中文文档](./README-ZH.md)
+## Was an diesem Fork anders ist
 
-</div>
+| Bereich | Upstream MiroFish | Dieser Fork |
+|---|---|---|
+| Memory-Layer | Zep Cloud (`zep-cloud` SDK, API-Key) | Graphiti 0.29 + Neo4j 5.26 Community, beides lokal als Compose-Service |
+| Memory-Touchpoint | mehrere direkte `zep_*`-Imports | genau einer: `backend/app/services/memory_service.py` |
+| Episode-Verarbeitung | asynchron mit Polling | synchron via `add_episode` (returnt erst, wenn Nodes/Edges in Neo4j sind) |
+| Report-Export | nur In-App-Anzeige | zusätzlich Markdown- und PDF-Download (WeasyPrint, server-side) |
+| Externe Abhängigkeit | Zep-Account erforderlich | nur OpenAI-kompatibler LLM-Endpoint |
 
-## ⚡ Overview
+Der frühere Zep-Compat-Wrapper wurde komplett entfernt. Neue Memory-Aufrufe laufen ausschließlich über `memory_service` — die Schnittstelle ist bewusst portabel geschnitten, sodass das Modul auch in anderen Projekten wiederverwendbar bleibt.
 
-**MiroFish** is a next-generation AI prediction engine powered by multi-agent technology. By extracting seed information from the real world (such as breaking news, policy drafts, or financial signals), it automatically constructs a high-fidelity parallel digital world. Within this space, thousands of intelligent agents with independent personalities, long-term memory, and behavioral logic freely interact and undergo social evolution. You can inject variables dynamically from a "God's-eye view" to precisely deduce future trajectories — **rehearse the future in a digital sandbox, and win decisions after countless simulations**.
+## Quickstart
 
-> You only need to: Upload seed materials (data analysis reports or interesting novel stories) and describe your prediction requirements in natural language</br>
-> MiroFish will return: A detailed prediction report and a deeply interactive high-fidelity digital world
-
-### Our Vision
-
-MiroFish is dedicated to creating a swarm intelligence mirror that maps reality. By capturing the collective emergence triggered by individual interactions, we break through the limitations of traditional prediction:
-
-- **At the Macro Level**: We are a rehearsal laboratory for decision-makers, allowing policies and public relations to be tested at zero risk
-- **At the Micro Level**: We are a creative sandbox for individual users — whether deducing novel endings or exploring imaginative scenarios, everything can be fun, playful, and accessible
-
-From serious predictions to playful simulations, we let every "what if" see its outcome, making it possible to predict anything.
-
-## 🌐 Live Demo
-
-Welcome to visit our online demo environment and experience a prediction simulation on trending public opinion events we've prepared for you: [mirofish-live-demo](https://666ghj.github.io/mirofish-demo/)
-
-## 📸 Screenshots
-
-<div align="center">
-<table>
-<tr>
-<td><img src="./static/image/Screenshot/运行截图1.png" alt="Screenshot 1" width="100%"/></td>
-<td><img src="./static/image/Screenshot/运行截图2.png" alt="Screenshot 2" width="100%"/></td>
-</tr>
-<tr>
-<td><img src="./static/image/Screenshot/运行截图3.png" alt="Screenshot 3" width="100%"/></td>
-<td><img src="./static/image/Screenshot/运行截图4.png" alt="Screenshot 4" width="100%"/></td>
-</tr>
-<tr>
-<td><img src="./static/image/Screenshot/运行截图5.png" alt="Screenshot 5" width="100%"/></td>
-<td><img src="./static/image/Screenshot/运行截图6.png" alt="Screenshot 6" width="100%"/></td>
-</tr>
-</table>
-</div>
-
-## 🎬 Demo Videos
-
-### 1. Wuhan University Public Opinion Simulation + MiroFish Project Introduction
-
-<div align="center">
-<a href="https://www.bilibili.com/video/BV1VYBsBHEMY/" target="_blank"><img src="./static/image/武大模拟演示封面.png" alt="MiroFish Demo Video" width="75%"/></a>
-
-Click the image to watch the complete demo video for prediction using BettaFish-generated "Wuhan University Public Opinion Report"
-</div>
-
-### 2. Dream of the Red Chamber Lost Ending Simulation
-
-<div align="center">
-<a href="https://www.bilibili.com/video/BV1cPk3BBExq" target="_blank"><img src="./static/image/红楼梦模拟推演封面.jpg" alt="MiroFish Demo Video" width="75%"/></a>
-
-Click the image to watch MiroFish's deep prediction of the lost ending based on hundreds of thousands of words from the first 80 chapters of "Dream of the Red Chamber"
-</div>
-
-> **Financial Prediction**, **Political News Prediction** and more examples coming soon...
-
-## 🔄 Workflow
-
-1. **Graph Building**: Seed extraction & Individual/collective memory injection & GraphRAG construction
-2. **Environment Setup**: Entity relationship extraction & Persona generation & Agent configuration injection
-3. **Simulation**: Dual-platform parallel simulation & Auto-parse prediction requirements & Dynamic temporal memory updates
-4. **Report Generation**: ReportAgent with rich toolset for deep interaction with post-simulation environment
-5. **Deep Interaction**: Chat with any agent in the simulated world & Interact with ReportAgent
-
-## 🚀 Quick Start
-
-### Option 1: Source Code Deployment (Recommended)
-
-#### Prerequisites
-
-| Tool | Version | Description | Check Installation |
-|------|---------|-------------|-------------------|
-| **Node.js** | 18+ | Frontend runtime, includes npm | `node -v` |
-| **Python** | ≥3.11, ≤3.12 | Backend runtime | `python --version` |
-| **uv** | Latest | Python package manager | `uv --version` |
-
-#### 1. Configure Environment Variables
+Voraussetzung: Docker und Docker Compose.
 
 ```bash
-# Copy the example configuration file
 cp .env.example .env
-
-# Edit the .env file and fill in the required API keys
-```
-
-**Required Environment Variables:**
-
-```env
-# LLM API Configuration (supports any LLM API with OpenAI SDK format)
-# Recommended: Alibaba Qwen-plus model via Bailian Platform: https://bailian.console.aliyun.com/
-# High consumption, try simulations with fewer than 40 rounds first
-LLM_API_KEY=your_api_key
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL_NAME=qwen-plus
-
-# Zep Cloud Configuration
-# Free monthly quota is sufficient for simple usage: https://app.getzep.com/
-ZEP_API_KEY=your_zep_api_key
-```
-
-#### 2. Install Dependencies
-
-```bash
-# One-click installation of all dependencies (root + frontend + backend)
-npm run setup:all
-```
-
-Or install step by step:
-
-```bash
-# Install Node dependencies (root + frontend)
-npm run setup
-
-# Install Python dependencies (backend, auto-creates virtual environment)
-npm run setup:backend
-```
-
-#### 3. Start Services
-
-```bash
-# Start both frontend and backend (run from project root)
-npm run dev
-```
-
-**Service URLs:**
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:5001`
-
-**Start Individually:**
-
-```bash
-npm run backend   # Start backend only
-npm run frontend  # Start frontend only
-```
-
-### Option 2: Docker Deployment
-
-```bash
-# 1. Configure environment variables (same as source deployment)
-cp .env.example .env
-
-# 2. Pull image and start
+# .env editieren: LLM_API_KEY, OPENAI_API_KEY, NEO4J_PASSWORD, NEO4J_AUTH
 docker compose up -d
+docker compose logs -f mirofish
 ```
 
-Reads `.env` from root directory by default, maps ports `3000 (frontend) / 5001 (backend)`
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:3000` |
+| Backend | `http://localhost:5001` |
+| Neo4j Browser | `http://localhost:7475` |
 
-> Mirror address for faster pulling is provided as comments in `docker-compose.yml`, replace if needed.
+Die Neo4j-Ports liegen auf `7475/7688` statt der Defaults, damit parallel laufende Neo4j-Container nicht kollidieren.
 
-## 📬 Join the Conversation
+## ENV-Variablen
 
-<div align="center">
-<img src="./static/image/QQ群.png" alt="QQ Group" width="60%"/>
-</div>
+| Variable | Pflicht | Zweck |
+|---|---|---|
+| `LLM_API_KEY` | ja | OpenAI-kompatibler Key für Chat und Embeddings |
+| `LLM_BASE_URL` | nein | Default `https://api.openai.com/v1` |
+| `LLM_MODEL_NAME` | nein | Default `gpt-4o-mini`. **Nicht `gpt-5.x` / o-Serie** — Graphiti sendet `reasoning.effort='minimal'`, das lehnen Reasoning-Modelle ab |
+| `OPENAI_API_KEY` | ja | Graphitis Default-Cross-Encoder liest ihn direkt aus dem Environment |
+| `NEO4J_AUTH` | ja | Compose-Variante im Format `user/password` |
+| `NEO4J_URI` | nein | Default `bolt://neo4j:7687` (Compose-intern) |
+| `NEO4J_USER` | nein | Default `neo4j` |
+| `NEO4J_PASSWORD` | ja | wie in `NEO4J_AUTH`, separat als Python-Setting |
 
-&nbsp;
+`.env` ist gitignored und gehört nicht ins Repo.
 
-The MiroFish team is recruiting full-time/internship positions. If you're interested in multi-agent simulation and LLM applications, feel free to send your resume to: **mirofish@shanda.com**
+## Memory-Service-API
 
-## 📄 Acknowledgments
+```python
+memory_service.register_ontology(group_id, entities, edges)
+memory_service.add_episode(group_id, content, source_type="text")
+memory_service.add_episodes_bulk(group_id, episodes)
+memory_service.search_edges(group_id, query, limit=10)
+memory_service.search_nodes(group_id, query, limit=10)
+memory_service.get_node(uuid)
+memory_service.get_node_edges(node_uuid)
+memory_service.get_nodes_by_group(group_id, limit, cursor)
+memory_service.get_edges_by_group(group_id, limit, cursor)
+memory_service.delete_group(group_id)
+```
 
-**MiroFish has received strategic support and incubation from Shanda Group!**
+`group_id` entspricht MiroFishs `graph_id` und hat das Format `mirofish_<16hex>`. Die Sync-Bridge zum Async-Graphiti-Loop läuft über einen dedizierten Background-Thread in `memory_service.py` — Service-Code soll `asyncio.run` nicht selbst aufrufen.
 
-MiroFish's simulation engine is powered by **[OASIS (Open Agent Social Interaction Simulations)](https://github.com/camel-ai/oasis)**, We sincerely thank the CAMEL-AI team for their open-source contributions!
+## Stolperfallen
 
-## 📈 Project Statistics
+- `docker compose restart` lädt `.env` **nicht** neu. Bei ENV-Änderungen `docker compose up -d --force-recreate mirofish`.
+- Backend-Code ist via Bind-Mount live im Container (`./backend/app:/app/backend/app`). Flask reloadet automatisch. Vor Production-Deploy diesen Mount entfernen.
+- `uv.lock` ist im Dockerfile frozen. Nach `pyproject.toml`-Änderungen lokal `cd backend && uv lock` ausführen und das Lockfile committen.
+- `docker compose down -v` löscht das Neo4j-Volume — bei kaputten Indexen oder Schema-Migrationen der schnellste Reset.
+- Ontology muss pro `group_id` registriert sein, **bevor** `add_episode` läuft. Ohne `register_ontology` extrahiert Graphiti ohne Schema.
 
-<a href="https://www.star-history.com/#666ghj/MiroFish&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=666ghj/MiroFish&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=666ghj/MiroFish&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=666ghj/MiroFish&type=date&legend=top-left" />
- </picture>
-</a>
+## Smoke-Tests
+
+```bash
+# Graph aus Seed bauen
+curl -X POST http://localhost:5001/api/graph/ontology/generate \
+  -F "files=@seed.txt" \
+  -F "simulation_requirement=..." \
+  -F "project_name=smoke"
+
+curl -X POST http://localhost:5001/api/graph/build \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"...","graph_name":"smoke"}'
+
+# Search via ReportAgent
+curl -X POST http://localhost:5001/api/report/chat \
+  -H "Content-Type: application/json" \
+  -d '{"simulation_id":"...","report_id":"...","message":"...","chat_history":[]}'
+```
+
+Direkter Neo4j-Check:
+
+```bash
+docker exec mirofish-neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
+  "MATCH (n) WHERE n.group_id STARTS WITH 'mirofish_' \
+   RETURN labels(n)[0] AS label, count(*) AS count ORDER BY count DESC"
+```
+
+## Credits
+
+- **[MiroFish](https://github.com/666ghj/MiroFish)** (Upstream) — Konzept, Frontend, Simulations-Workflow. Maintained von [@666ghj](https://github.com/666ghj) mit Unterstützung der Shanda Group.
+- **[OASIS](https://github.com/camel-ai/oasis)** vom CAMEL-AI-Team — Simulation-Engine, die die Agent-Interaktionen trägt.
+- **[Graphiti](https://github.com/getzep/graphiti)** von getzep — der temporale Knowledge-Graph, der hier Zep Cloud ersetzt.
+- **[Neo4j](https://neo4j.com/)** Community Edition — Storage-Backend für Graphiti.
+
+Für Fragen zum ursprünglichen MiroFish, zur Vision und zu Demos siehe das [Upstream-Repo](https://github.com/666ghj/MiroFish).
+
+## Lizenz
+
+Folgt der Lizenz des Upstream-Projekts — siehe `LICENSE` in beiden Repos.
