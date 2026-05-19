@@ -248,6 +248,7 @@ def generate_ontology():
         })
         
     except Exception as e:
+        logger.exception("Ontology generation failed")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -283,10 +284,12 @@ def build_graph():
     try:
         logger.info("=== Starting graph build ===")
 
-        # Validate config
+        # Validate config (Graphiti+Neo4j replaces Zep Cloud)
         errors = []
-        if not Config.ZEP_API_KEY:
-            errors.append(t('api.zepApiKeyMissing'))
+        if not Config.NEO4J_PASSWORD:
+            errors.append("NEO4J_PASSWORD is not configured")
+        if not Config.LLM_API_KEY:
+            errors.append("LLM_API_KEY is not configured")
         if errors:
             logger.error(f"Config error: {errors}")
             return jsonify({
@@ -387,7 +390,7 @@ def build_graph():
                 )
 
                 # Create the graph build service
-                builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+                builder = GraphBuilderService(api_key=None)
 
                 # Chunk text
                 task_manager.update_task(
@@ -444,22 +447,8 @@ def build_graph():
                     progress_callback=add_progress_callback
                 )
 
-                # Wait for Zep processing to finish (poll each episode's processed state)
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.waitingZepProcess'),
-                    progress=55
-                )
-
-                def wait_progress_callback(msg, progress_ratio):
-                    progress = 55 + int(progress_ratio * 35)  # 55% - 90%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
-                    )
-
-                builder._wait_for_episodes(episode_uuids, wait_progress_callback)
+                # Graphiti's add_episode is synchronous; episodes are already
+                # processed when add_text_batches returns. No polling step needed.
 
                 # Fetch graph data
                 task_manager.update_task(
@@ -572,13 +561,13 @@ def get_graph_data(graph_id: str):
     Get graph data (nodes and edges).
     """
     try:
-        if not Config.ZEP_API_KEY:
+        if not Config.NEO4J_PASSWORD:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": "NEO4J_PASSWORD is not configured"
             }), 500
-        
-        builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+
+        builder = GraphBuilderService(api_key=None)
         graph_data = builder.get_graph_data(graph_id)
         
         return jsonify({
@@ -600,13 +589,13 @@ def delete_graph(graph_id: str):
     Delete a Zep graph.
     """
     try:
-        if not Config.ZEP_API_KEY:
+        if not Config.NEO4J_PASSWORD:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": "NEO4J_PASSWORD is not configured"
             }), 500
-        
-        builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+
+        builder = GraphBuilderService(api_key=None)
         builder.delete_graph(graph_id)
         
         return jsonify({

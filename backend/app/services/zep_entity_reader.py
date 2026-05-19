@@ -7,11 +7,28 @@ import time
 from typing import Dict, Any, List, Optional, Set, Callable, TypeVar
 from dataclasses import dataclass, field
 
-from zep_cloud.client import Zep
+from . import memory_service
 
 from ..config import Config
 from ..utils.logger import get_logger
-from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
+
+
+def _paginate(fetcher, graph_id: str, page_size: int = 100, hard_cap: int = 2000):
+    items = []
+    cursor: Optional[str] = None
+    while True:
+        page = fetcher(graph_id, limit=page_size, cursor=cursor)
+        if not page:
+            break
+        items.extend(page)
+        if len(items) >= hard_cap:
+            return items[:hard_cap]
+        if len(page) < page_size:
+            break
+        cursor = page[-1].uuid
+        if not cursor:
+            break
+    return items
 
 logger = get_logger('mirofish.zep_entity_reader')
 
@@ -79,11 +96,9 @@ class ZepEntityReader:
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or Config.ZEP_API_KEY
-        if not self.api_key:
-            raise ValueError("ZEP_API_KEY is not configured")
-
-        self.client = Zep(api_key=self.api_key)
+        # api_key kept for backwards compat; memory_service reads connection from Config.
+        self._api_key = api_key
+        memory_service.warmup()
 
     def _call_with_retry(
         self,
@@ -136,12 +151,12 @@ class ZepEntityReader:
         """
         logger.info(f"Fetching all nodes for graph {graph_id}...")
 
-        nodes = fetch_all_nodes(self.client, graph_id)
+        nodes = _paginate(memory_service.get_nodes_by_group, graph_id)
 
         nodes_data = []
         for node in nodes:
             nodes_data.append({
-                "uuid": getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
+                "uuid": node.uuid or "",
                 "name": node.name or "",
                 "labels": node.labels or [],
                 "summary": node.summary or "",
@@ -163,12 +178,12 @@ class ZepEntityReader:
         """
         logger.info(f"Fetching all edges for graph {graph_id}...")
 
-        edges = fetch_all_edges(self.client, graph_id)
+        edges = _paginate(memory_service.get_edges_by_group, graph_id)
 
         edges_data = []
         for edge in edges:
             edges_data.append({
-                "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
+                "uuid": edge.uuid or "",
                 "name": edge.name or "",
                 "fact": edge.fact or "",
                 "source_node_uuid": edge.source_node_uuid,
@@ -190,16 +205,15 @@ class ZepEntityReader:
             List of edges
         """
         try:
-            # Call the Zep API with retry
             edges = self._call_with_retry(
-                func=lambda: self.client.graph.node.get_entity_edges(node_uuid=node_uuid),
-                operation_name=f"get_node_edges(node={node_uuid[:8]}...)"
+                func=lambda: memory_service.get_node_edges(node_uuid=node_uuid),
+                operation_name=f"get_node_edges(node={node_uuid[:8]}...)",
             )
 
             edges_data = []
             for edge in edges:
                 edges_data.append({
-                    "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
+                    "uuid": edge.uuid or "",
                     "name": edge.name or "",
                     "fact": edge.fact or "",
                     "source_node_uuid": edge.source_node_uuid,
@@ -348,8 +362,8 @@ class ZepEntityReader:
         try:
             # Fetch the node with retry
             node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=entity_uuid),
-                operation_name=f"get_node_detail(uuid={entity_uuid[:8]}...)"
+                func=lambda: memory_service.get_node(entity_uuid),
+                operation_name=f"get_node_detail(uuid={entity_uuid[:8]}...)",
             )
 
             if not node:
@@ -397,7 +411,7 @@ class ZepEntityReader:
                     })
 
             return EntityNode(
-                uuid=getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
+                uuid=node.uuid or "",
                 name=node.name or "",
                 labels=node.labels or [],
                 summary=node.summary or "",

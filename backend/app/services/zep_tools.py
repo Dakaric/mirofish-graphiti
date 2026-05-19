@@ -13,15 +13,34 @@ import json
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
-from zep_cloud.client import Zep
+from . import memory_service
 
 from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_locale, t
-from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 
 logger = get_logger('mirofish.zep_tools')
+
+
+def _paginate(fetcher, graph_id: str, page_size: int = 100, hard_cap: int = 2000):
+    """Walk all pages of a memory_service paged fetcher (get_nodes_by_group /
+    get_edges_by_group) and return the flattened list. Uses uuid-cursor paging."""
+    items = []
+    cursor: Optional[str] = None
+    while True:
+        page = fetcher(graph_id, limit=page_size, cursor=cursor)
+        if not page:
+            break
+        items.extend(page)
+        if len(items) >= hard_cap:
+            return items[:hard_cap]
+        if len(page) < page_size:
+            break
+        cursor = page[-1].uuid
+        if not cursor:
+            break
+    return items
 
 
 @dataclass
@@ -423,11 +442,10 @@ class ZepToolsService:
     RETRY_DELAY = 2.0
     
     def __init__(self, api_key: Optional[str] = None, llm_client: Optional[LLMClient] = None):
-        self.api_key = api_key or Config.ZEP_API_KEY
-        if not self.api_key:
-            raise ValueError("ZEP_API_KEY is not configured")
-
-        self.client = Zep(api_key=self.api_key)
+        # api_key kept for backwards-compatible call sites; ignored (memory_service
+        # reads connection details from Config directly).
+        self._api_key = api_key
+        memory_service.warmup()
         # LLM client used by InsightForge to generate sub-questions
         self._llm_client = llm_client
         logger.info(t("console.zepToolsInitialized"))
@@ -485,62 +503,52 @@ class ZepToolsService:
         """
         logger.info(t("console.graphSearch", graphId=graph_id, query=query[:50]))
 
-        # Try the Zep Cloud Search API first
         try:
-            search_results = self._call_with_retry(
-                func=lambda: self.client.graph.search(
-                    graph_id=graph_id,
-                    query=query,
-                    limit=limit,
-                    scope=scope,
-                    reranker="cross_encoder"
-                ),
-                operation_name=t("console.graphSearchOp", graphId=graph_id)
-            )
-            
-            facts = []
-            edges = []
-            nodes = []
-            
-            # Parse edge search results
-            if hasattr(search_results, 'edges') and search_results.edges:
-                for edge in search_results.edges:
-                    if hasattr(edge, 'fact') and edge.fact:
+            facts: List[str] = []
+            edges_result: List[Dict[str, Any]] = []
+            nodes_result: List[Dict[str, Any]] = []
+
+            if scope in ("edges", "both"):
+                edge_hits = self._call_with_retry(
+                    func=lambda: memory_service.search_edges(group_id=graph_id, query=query, limit=limit),
+                    operation_name=t("console.graphSearchOp", graphId=graph_id),
+                )
+                for edge in edge_hits:
+                    if edge.fact:
                         facts.append(edge.fact)
-                    edges.append({
-                        "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
-                        "name": getattr(edge, 'name', ''),
-                        "fact": getattr(edge, 'fact', ''),
-                        "source_node_uuid": getattr(edge, 'source_node_uuid', ''),
-                        "target_node_uuid": getattr(edge, 'target_node_uuid', ''),
+                    edges_result.append({
+                        "uuid": edge.uuid,
+                        "name": edge.name,
+                        "fact": edge.fact,
+                        "source_node_uuid": edge.source_node_uuid,
+                        "target_node_uuid": edge.target_node_uuid,
                     })
-            
-            # Parse node search results
-            if hasattr(search_results, 'nodes') and search_results.nodes:
-                for node in search_results.nodes:
-                    nodes.append({
-                        "uuid": getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
-                        "name": getattr(node, 'name', ''),
-                        "labels": getattr(node, 'labels', []),
-                        "summary": getattr(node, 'summary', ''),
+
+            if scope in ("nodes", "both"):
+                node_hits = self._call_with_retry(
+                    func=lambda: memory_service.search_nodes(group_id=graph_id, query=query, limit=limit),
+                    operation_name=t("console.graphSearchOp", graphId=graph_id),
+                )
+                for node in node_hits:
+                    nodes_result.append({
+                        "uuid": node.uuid,
+                        "name": node.name,
+                        "labels": node.labels,
+                        "summary": node.summary,
                     })
-                    # Treat node summaries as facts as well
-                    if hasattr(node, 'summary') and node.summary:
+                    if node.summary:
                         facts.append(f"[{node.name}]: {node.summary}")
-            
+
             logger.info(t("console.searchComplete", count=len(facts)))
-            
             return SearchResult(
                 facts=facts,
-                edges=edges,
-                nodes=nodes,
+                edges=edges_result,
+                nodes=nodes_result,
                 query=query,
-                total_count=len(facts)
+                total_count=len(facts),
             )
-            
         except Exception as e:
             logger.warning(t("console.zepSearchApiFallback", error=str(e)))
-            # Fallback: local keyword matching search
             return self._local_search(graph_id, query, limit, scope)
     
     def _local_search(
@@ -659,17 +667,16 @@ class ZepToolsService:
         """
         logger.info(t("console.fetchingAllNodes", graphId=graph_id))
 
-        nodes = fetch_all_nodes(self.client, graph_id)
+        nodes = _paginate(memory_service.get_nodes_by_group, graph_id)
 
         result = []
         for node in nodes:
-            node_uuid = getattr(node, 'uuid_', None) or getattr(node, 'uuid', None) or ""
             result.append(NodeInfo(
-                uuid=str(node_uuid) if node_uuid else "",
+                uuid=node.uuid or "",
                 name=node.name or "",
                 labels=node.labels or [],
                 summary=node.summary or "",
-                attributes=node.attributes or {}
+                attributes=node.attributes or {},
             ))
 
         logger.info(t("console.fetchedNodes", count=len(result)))
@@ -688,26 +695,22 @@ class ZepToolsService:
         """
         logger.info(t("console.fetchingAllEdges", graphId=graph_id))
 
-        edges = fetch_all_edges(self.client, graph_id)
+        edges = _paginate(memory_service.get_edges_by_group, graph_id)
 
         result = []
         for edge in edges:
-            edge_uuid = getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', None) or ""
             edge_info = EdgeInfo(
-                uuid=str(edge_uuid) if edge_uuid else "",
+                uuid=edge.uuid or "",
                 name=edge.name or "",
                 fact=edge.fact or "",
                 source_node_uuid=edge.source_node_uuid or "",
-                target_node_uuid=edge.target_node_uuid or ""
+                target_node_uuid=edge.target_node_uuid or "",
             )
-
-            # Attach temporal information
             if include_temporal:
-                edge_info.created_at = getattr(edge, 'created_at', None)
-                edge_info.valid_at = getattr(edge, 'valid_at', None)
-                edge_info.invalid_at = getattr(edge, 'invalid_at', None)
-                edge_info.expired_at = getattr(edge, 'expired_at', None)
-
+                edge_info.created_at = edge.created_at
+                edge_info.valid_at = edge.valid_at
+                edge_info.invalid_at = edge.invalid_at
+                edge_info.expired_at = edge.expired_at
             result.append(edge_info)
 
         logger.info(t("console.fetchedEdges", count=len(result)))
@@ -727,19 +730,19 @@ class ZepToolsService:
         
         try:
             node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=node_uuid),
-                operation_name=t("console.fetchNodeDetailOp", uuid=node_uuid[:8])
+                func=lambda: memory_service.get_node(node_uuid),
+                operation_name=t("console.fetchNodeDetailOp", uuid=node_uuid[:8]),
             )
-            
+
             if not node:
                 return None
-            
+
             return NodeInfo(
-                uuid=getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
+                uuid=node.uuid or "",
                 name=node.name or "",
                 labels=node.labels or [],
                 summary=node.summary or "",
-                attributes=node.attributes or {}
+                attributes=node.attributes or {},
             )
         except Exception as e:
             logger.error(t("console.fetchNodeDetailFailed", error=str(e)))

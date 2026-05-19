@@ -398,40 +398,68 @@ def list_reports():
 @report_bp.route('/<report_id>/download', methods=['GET'])
 def download_report(report_id: str):
     """
-    Download report as Markdown.
+    Download report as Markdown or PDF.
 
-    Returns the Markdown file.
+    Query params:
+        format: "md" (default) or "pdf"
     """
     try:
         report = ReportManager.get_report(report_id)
-        
+
         if not report:
             return jsonify({
                 "success": False,
                 "error": t('api.reportNotFound', id=report_id)
             }), 404
-        
+
+        fmt = (request.args.get('format') or 'md').lower()
+        if fmt not in ('md', 'pdf'):
+            return jsonify({
+                "success": False,
+                "error": f"Unsupported format: {fmt}"
+            }), 400
+
         md_path = ReportManager._get_report_markdown_path(report_id)
-        
-        if not os.path.exists(md_path):
-            # If the MD file doesn't exist, write a temporary one
+        markdown_content = report.markdown_content or ''
+        if os.path.exists(md_path):
+            try:
+                with open(md_path, 'r', encoding='utf-8') as f:
+                    markdown_content = f.read()
+            except OSError:
+                pass
+
+        if fmt == 'md':
+            if os.path.exists(md_path):
+                return send_file(
+                    md_path,
+                    as_attachment=True,
+                    download_name=f"{report_id}.md",
+                    mimetype='text/markdown; charset=utf-8',
+                )
             import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-                f.write(report.markdown_content)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+                f.write(markdown_content)
                 temp_path = f.name
-            
             return send_file(
                 temp_path,
                 as_attachment=True,
-                download_name=f"{report_id}.md"
+                download_name=f"{report_id}.md",
+                mimetype='text/markdown; charset=utf-8',
             )
-        
+
+        # fmt == 'pdf'
+        from ..services.report_pdf import render_pdf
+        from io import BytesIO
+
+        title = getattr(report, 'title', None) or report_id
+        pdf_bytes = render_pdf(markdown_content, title=title, report_id=report_id)
         return send_file(
-            md_path,
+            BytesIO(pdf_bytes),
             as_attachment=True,
-            download_name=f"{report_id}.md"
+            download_name=f"{report_id}.pdf",
+            mimetype='application/pdf',
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to download report: {str(e)}")
         return jsonify({

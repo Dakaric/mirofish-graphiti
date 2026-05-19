@@ -250,6 +250,9 @@
     "world2": "World 2"
   },
   "step5": {
+    "downloadMd": "Markdown",
+    "downloadPdf": "PDF",
+    "downloadFailed": "Download as {format} failed",
     "interactiveTools": "Interactive Tools",
     "agentsAvailable": "{count} agents available",
     "chatWithReportAgent": "Chat with Report Agent",

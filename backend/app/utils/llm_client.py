@@ -51,12 +51,21 @@ class LLMClient:
         Returns:
             Model response text
         """
-        kwargs = {
+        kwargs: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
         }
+
+        # GPT-5 family and o-series reasoning models reject `max_tokens` and
+        # only accept the default temperature; use `max_completion_tokens`.
+        model_id = (self.model or "").lower()
+        is_reasoning_model = model_id.startswith("gpt-5") or model_id.startswith("o1") or model_id.startswith("o3") or model_id.startswith("o4")
+
+        if is_reasoning_model:
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
+            kwargs["temperature"] = temperature
 
         if response_format:
             kwargs["response_format"] = response_format

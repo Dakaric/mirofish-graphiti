@@ -1,8 +1,11 @@
 FROM python:3.11
 
-# Install Node.js (>=18) and required tools
+# Install Node.js (>=18) and WeasyPrint runtime deps (pango/harfbuzz) for PDF export
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends nodejs npm \
+  && apt-get install -y --no-install-recommends \
+       nodejs npm \
+       libpango-1.0-0 libpangoft2-1.0-0 \
+       libharfbuzz0b shared-mime-info fonts-dejavu \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy uv from the official uv image
